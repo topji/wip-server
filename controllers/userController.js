@@ -132,6 +132,29 @@ const userController = {
                 error: error.message
             });
         }
+    },
+
+    // Check if user exists
+    isUser: async (req, res) => {
+        try {
+            const { userAddress } = req.params;
+            const { wipContract } = wipContractInstance();
+
+            // Get user data from blockchain
+            const userData = await wipContract.getUserData(userAddress);
+            
+            // Check if username exists (if username is empty string, user is not registered)
+            const isRegistered = userData && userData.username !== "";
+
+            res.status(200).json({
+                success: isRegistered
+            });
+        } catch (error) {
+            // If there's an error, assume user is not registered
+            res.status(200).json({
+                success: false
+            });
+        }
     }
 };
 
