@@ -1,24 +1,63 @@
 const { wipContractInstance } = require('../contract/contract');
-const { CertificateData } = require('../models');
+const { UserData, CertificateData } = require('../models');
+
 
 const certificateController = {
     // Create a new certificate
     createCertificate: async (req, res) => {
         try {
-            const { fileHash, metadataURI, userAddress } = req.body;
+            const { 
+                fileHash, 
+                metadataURI, 
+                description,
+                fileFormat,
+                owners
+            } = req.body;
+            
             const { wipContract } = wipContractInstance();
 
+            // Validate total ownership percentage
+            const totalPercentage = owners.reduce((sum, owner) => sum + owner.percentage, 0);
+            if (totalPercentage !== 100) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Total ownership percentage must be 100%"
+                });
+            }
+
+            // // Check if all owners are registered users
+            // const ownerAddresses = owners.map(owner => owner.walletAddress.toLowerCase());
+            // const registeredUsers = await UserData.find({
+            //     userAddress: { $in: ownerAddresses }
+            // });
+
+            // // Create a set of registered addresses for easy lookup
+            // const registeredAddresses = new Set(
+            //     registeredUsers.map(user => user.userAddress.toLowerCase())
+            // );
+
+            // // Find unregistered addresses
+            // const unregisteredAddresses = ownerAddresses.filter(
+            //     address => !registeredAddresses.has(address.toLowerCase())
+            // );
+
+            // if (unregisteredAddresses.length > 0) {
+            //     return res.status(400).json({
+            //         success: false,
+            //         message: "All owners must be registered users",
+            //         unregisteredAddresses
+            //     });
+            // }
+
+            // Proceed with certificate creation on blockchain
             const tx = await wipContract.createCertificate(
                 fileHash,
                 metadataURI,
-                userAddress
+                owners[0].walletAddress // Only send the first owner's address to blockchain
             );
 
-            // Wait for transaction receipt
             const receipt = await tx.wait();
             console.log(receipt);
-            
-            // // Find the CertificateCreated event in the receipt
             // const certificateCreatedEvent = receipt.logs.find(
             //     log => {
             //         try {
@@ -32,11 +71,6 @@ const certificateController = {
             //     }
             // );
 
-            // if (!certificateCreatedEvent) {
-            //     throw new Error('Certificate creation event not found in transaction receipt');
-            // }
-
-            // // Parse the event data
             // const eventData = wipContract.interface.parseLog({
             //     topics: certificateCreatedEvent.topics,
             //     data: certificateCreatedEvent.data
@@ -49,18 +83,22 @@ const certificateController = {
             const timestamp = parseInt(certificateDetails.timestamp);
             console.log(timestamp);
 
-            // Save to MongoDB
+            // Save to MongoDB with all owners and their percentages
             await CertificateData.create({
                 certificateId,
                 fileHash,
                 metadataURI,
+                description,
+                fileFormat,
                 timestamp: timestamp,
-                owner: userAddress.toLowerCase(),
+                owners: owners.map(owner => ({
+                    walletAddress: owner.walletAddress.toLowerCase(),
+                    percentage: owner.percentage
+                })),
                 updates: [],
                 metadataUpdates: [],
                 transactionHash: tx.hash
             });
-            console.log("certificateData");
 
             res.status(200).json({
                 success: true,
@@ -126,25 +164,32 @@ const certificateController = {
     getCertificateDetails: async (req, res) => {
         try {
             const { certificateId } = req.params;
-            const { wipContract } = wipContractInstance();
 
-            // Get data from both blockchain and MongoDB
-            const [blockchainData, mongoData] = await Promise.all([
-                wipContract.getCertificateDetails(certificateId),
-                CertificateData.findOne({ certificateId })
-            ]);
+            // Get data from MongoDB only
+            const certificateData = await CertificateData.findOne({ certificateId });
+
+            if (!certificateData) {
+                return res.status(404).json({
+                    success: false,
+                    message: "Certificate not found"
+                });
+            }
 
             res.status(200).json({
                 success: true,
                 data: {
-                    id: blockchainData.id.toString(),
-                    fileHash: blockchainData.fileHash,
-                    metadataURI: blockchainData.metadataURI,
-                    timestamp: blockchainData.timestamp.toString(),
-                    owner: blockchainData.certOwner,
-                    updates: blockchainData.updates,
-                    metadataUpdates: blockchainData.metadataUpdates,
-                    transactionHash: mongoData?.transactionHash
+                    id: certificateData.certificateId,
+                    fileHash: certificateData.fileHash,
+                    metadataURI: certificateData.metadataURI,
+                    description: certificateData.description,
+                    fileFormat: certificateData.fileFormat,
+                    timestamp: certificateData.timestamp,
+                    owners: certificateData.owners,
+                    updates: certificateData.updates,
+                    metadataUpdates: certificateData.metadataUpdates,
+                    transactionHash: certificateData.transactionHash,
+                    createdAt: certificateData.createdAt,
+                    updatedAt: certificateData.updatedAt
                 }
             });
         } catch (error) {
