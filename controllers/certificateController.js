@@ -119,7 +119,13 @@ const certificateController = {
     // Update an existing certificate
     updateCertificate: async (req, res) => {
         try {
-            const { certificateId, updatedFileHash, updatedMetadataURI } = req.body;
+            const { 
+                certificateId, 
+                updatedFileHash, 
+                updatedMetadataURI,
+                updatedDescription 
+            } = req.body;
+            
             const { wipContract } = wipContractInstance();
 
             const tx = await wipContract.updateCertificate(
@@ -140,6 +146,10 @@ const certificateController = {
                     $push: {
                         updates: updatedFileHash,
                         metadataUpdates: updatedMetadataURI
+                    },
+                    $set: {
+                        fileHash: updatedFileHash,
+                        description: updatedDescription
                     },
                     transactionHash: tx.hash
                 },
