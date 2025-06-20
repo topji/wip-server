@@ -252,13 +252,15 @@ const certificateController = {
     getUserCertificates: async (req, res) => {
         try {
             const { userAddress } = req.params;
-            const { wipContract } = wipContractInstance();
-
-            const certificates = await wipContract.getCertificatesByUser(userAddress);
+            
+            // Query MongoDB for certificates where the user is an owner
+            const certificates = await CertificateData.find({
+                'owners.walletAddress': userAddress.toLowerCase()
+            }).select('certificateId fileHash description fileFormat timestamp owners');
 
             res.status(200).json({
                 success: true,
-                data: certificates.map(cert => cert.toString())
+                data: certificates
             });
         } catch (error) {
             res.status(500).json({
