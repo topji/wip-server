@@ -15,6 +15,26 @@ const ownershipSchema = new mongoose.Schema({
     }
 }, { _id: false });
 
+// Define update schema for tracking file updates
+const updateSchema = new mongoose.Schema({
+    fileHash: {
+        type: String,
+        required: true
+    },
+    description: {
+        type: String,
+        required: true
+    },
+    timestamp: {
+        type: Number,
+        required: true
+    },
+    transactionHash: {
+        type: String,
+        required: true
+    }
+}, { _id: false });
+
 const certificateDataSchema = new mongoose.Schema({
     certificateId: {
         type: Number,
@@ -60,12 +80,11 @@ const certificateDataSchema = new mongoose.Schema({
             message: 'Total ownership percentage must be 100%'
         }
     },
-    updates: [{
-        type: String
-    }],
-    metadataUpdates: [{
-        type: String
-    }],
+    // Replace simple arrays with detailed update tracking
+    updates: {
+        type: [updateSchema],
+        default: []
+    },
     transactionHash: String,
     isActive: {
         type: Boolean,

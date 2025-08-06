@@ -134,24 +134,42 @@ const certificateController = {
                 updatedMetadataURI
             );
 
-            await tx.wait();
+            const receipt = await tx.wait();
+            
+            // Get current timestamp
+            const currentTimestamp = Math.floor(Date.now() / 1000);
 
             // Get current certificate data
             const certificate = await CertificateData.findOne({ certificateId });
             
-            // Update in MongoDB
+            if (!certificate) {
+                return res.status(404).json({
+                    success: false,
+                    message: "Certificate not found"
+                });
+            }
+
+            // Create update entry with all details
+            const updateEntry = {
+                fileHash: updatedFileHash,
+                description: updatedDescription,
+                timestamp: currentTimestamp,
+                transactionHash: tx.hash
+            };
+
+            // Update in MongoDB with new update entry
             await CertificateData.findOneAndUpdate(
                 { certificateId },
                 {
                     $push: {
-                        updates: updatedFileHash,
-                        metadataUpdates: updatedMetadataURI
+                        updates: updateEntry
                     },
                     $set: {
                         fileHash: updatedFileHash,
-                        description: updatedDescription
-                    },
-                    transactionHash: tx.hash
+                        metadataURI: updatedMetadataURI,
+                        description: updatedDescription,
+                        transactionHash: tx.hash
+                    }
                 },
                 { new: true }
             );
@@ -159,9 +177,11 @@ const certificateController = {
             res.status(200).json({
                 success: true,
                 message: "Certificate updated successfully",
-                transaction: tx.hash
+                transaction: tx.hash,
+                updateEntry
             });
         } catch (error) {
+            console.error('Certificate update error:', error);
             res.status(500).json({
                 success: false,
                 message: "Error updating certificate",
@@ -196,7 +216,7 @@ const certificateController = {
                     timestamp: certificateData.timestamp,
                     owners: certificateData.owners,
                     updates: certificateData.updates,
-                    metadataUpdates: certificateData.metadataUpdates,
+                    updatedFileHashes: certificateData.updates.map(update => update.fileHash),
                     transactionHash: certificateData.transactionHash,
                     createdAt: certificateData.createdAt,
                     updatedAt: certificateData.updatedAt
