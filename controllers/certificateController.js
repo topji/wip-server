@@ -25,6 +25,32 @@ const certificateController = {
                 });
             }
 
+            // Check if file hash is unique
+            const existingCertificate = await CertificateData.findOne({
+                fileHash: fileHash
+            });
+
+            if (existingCertificate) {
+                return res.status(400).json({
+                    success: false,
+                    message: "File is already registered",
+                    existingCertificateId: existingCertificate.certificateId
+                });
+            }
+
+            // Check if the hash exists in any certificate's update history
+            const certificateWithHashInUpdates = await CertificateData.findOne({
+                'updates.fileHash': fileHash
+            });
+
+            if (certificateWithHashInUpdates) {
+                return res.status(400).json({
+                    success: false,
+                    message: "File is already registered",
+                    existingCertificateId: certificateWithHashInUpdates.certificateId
+                });
+            }
+
             // // Check if all owners are registered users
             // const ownerAddresses = owners.map(owner => owner.walletAddress.toLowerCase());
             // const registeredUsers = await UserData.find({
@@ -168,6 +194,7 @@ const certificateController = {
                         fileHash: updatedFileHash,
                         metadataURI: updatedMetadataURI,
                         description: updatedDescription,
+                        timestamp: currentTimestamp,
                         transactionHash: tx.hash
                     }
                 },
@@ -286,6 +313,63 @@ const certificateController = {
             res.status(500).json({
                 success: false,
                 message: "Error fetching user certificates",
+                error: error.message
+            });
+        }
+    },
+
+    // Check if a file hash is unique across all certificates
+    isUniqueHash: async (req, res) => {
+        try {
+            const { fileHash } = req.params;
+
+            if (!fileHash) {
+                return res.status(400).json({
+                    success: false,
+                    message: "File hash is required"
+                });
+            }
+
+            // Check if the hash exists as a current fileHash in any certificate
+            const existingCertificate = await CertificateData.findOne({
+                fileHash: fileHash
+            });
+
+            if (existingCertificate) {
+                return res.status(200).json({
+                    success: true,
+                    isUnique: false,
+                    message: "File hash already exists as current file hash in another certificate",
+                    existingCertificateId: existingCertificate.certificateId
+                });
+            }
+
+            // Check if the hash exists in any certificate's update history
+            const certificateWithHashInUpdates = await CertificateData.findOne({
+                'updates.fileHash': fileHash
+            });
+
+            if (certificateWithHashInUpdates) {
+                return res.status(200).json({
+                    success: true,
+                    isUnique: false,
+                    message: "File hash already exists in update history of another certificate",
+                    existingCertificateId: certificateWithHashInUpdates.certificateId
+                });
+            }
+
+            // If we reach here, the hash is unique
+            res.status(200).json({
+                success: true,
+                isUnique: true,
+                message: "File hash is unique and can be used"
+            });
+
+        } catch (error) {
+            console.error('Hash uniqueness check error:', error);
+            res.status(500).json({
+                success: false,
+                message: "Error checking hash uniqueness",
                 error: error.message
             });
         }
